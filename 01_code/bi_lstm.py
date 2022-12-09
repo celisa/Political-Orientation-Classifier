@@ -16,7 +16,8 @@ warnings.filterwarnings('ignore')
 #2 What does dropout do? What do the values mean?
 #2. what is proj_size? 
 #3. is the one-hot encoding correct? Should we do embedding with GloVe? But that would generate 2d arrays for each sentence, right? Seems like a lot to process.
-#4 what does .contiguous().view(-1, self.hidden_dim) do?
+#4 what does .contiguous().view(-1, self.hidden_dim) do? 
+#4 how do we choose the embedding size for the model?
 #5. what does clip do for the optimizer? Helps with explording gradient problem
 #6 what happens when model(output, hidden) is called? how is tied to forward?
 #7 how to calculate f1 scores? What is the model actually outputting?? I need to understand the output of the model better.
@@ -119,15 +120,17 @@ def add_padding(sentences, seq_len = 280):
 def get_input_data(path): 
     """Reads in the data and returns the input data and labels for training and testing"""
     # Read train data
-    train_df = pd.read_csv(path + 'cleaned_train.csv', nrows = 10000)
+    train_df = pd.read_csv(path + 'cleaned_train.csv')
     X_train = pd.DataFrame(train_df['text'])
     y_train = train_df['labels'].to_numpy()
+    print(f"length of training data: {len(y_train)}")
 
     # Read test data
-    test_df = pd.read_csv(path + 'cleaned_test.csv', nrows = 1000)
+    test_df = pd.read_csv(path + 'cleaned_test.csv')
     X_test = pd.DataFrame(test_df['text'])
     y_test = test_df['labels'].to_numpy()
-
+    print(f"length of testing data: {len(y_test)}")
+    
     # Tokenize data
     one_hot_dict_train = create_one_hot_dict(X_train)
     one_hot_dict_test = create_one_hot_dict(X_test)
@@ -249,7 +252,7 @@ def train_model(model, device, train_loader, test_loader, clip = 5, epochs = 10,
             min_loss = epoch_test_losses[-1]
         print(30*'=')
 
-        return epoch_train_losses, epoch_test_losses, epoch_train_acc, epoch_test_acc, epoch_train_f1, epoch_test_f1
+    return epoch_train_losses, epoch_test_losses, epoch_train_acc, epoch_test_acc, epoch_train_f1, epoch_test_f1
              
 def run_model():
 
