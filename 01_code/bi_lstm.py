@@ -6,6 +6,8 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import TensorDataset, DataLoader
 from torchmetrics import F1Score
 from collections import Counter
+import warnings
+warnings.filterwarnings('ignore')
 
 #remember to cite:
 #pytorch docs
@@ -16,6 +18,8 @@ from collections import Counter
 #3. is the one-hot encoding correct? Should we do embedding with GloVe? But that would generate 2d arrays for each sentence, right? Seems like a lot to process.
 #4 what does .contiguous().view(-1, self.hidden_dim) do?
 #5. what does clip do for the optimizer? Helps with explording gradient problem
+#6 what happens when model(output, hidden) is called? how is tied to forward?
+#7 how to calculate f1 scores? What is the model actually outputting?? I need to understand the output of the model better.
 """We need to add an embedding layer because there are less words in our vocabulary. 
 It is massively inefficient to one-hot encode that many classes. So, instead of one-hot encoding, 
 we can have an embedding layer and use that layer as a lookup table. 
@@ -60,19 +64,16 @@ class BiLSTM(nn.Module):
         return (torch.zeros(self.num_layers * 2, self.batch_size, self.hidden_size),
                 torch.zeros(self.num_layers * 2, self.batch_size, self.hidden_size))
     
-    def forward(self, input):
+    def forward(self, input, hidden):
 
         #get batch size
         batch_size = input.size(0)
-
-        #initialize hidden state
-        h, c = self.init_hidden()
 
         # Embed the input
         embedded = self.embedding(input) #embedded is a 3d array with shape (batch_size, seq_len, embedding_dim)
         
         # Forward pass through LSTM layer
-        output, (h_, c_) = self.lstm(embedded, (h, c))
+        output, hidden = self.lstm(embedded, hidden)
         output = output.contiguous().view(-1, self.hidden_size * 2) #what does this do??
 
         output = nn.Dropout(self.dropout)(output)
@@ -84,7 +85,7 @@ class BiLSTM(nn.Module):
         # reshape to be batch_size
         output = output.view(batch_size, -1)
         y_pred = output[:, -1] # get last batch of labels
-        return y_pred
+        return y_pred, hidden
 
 def create_one_hot_dict(df):
     """Creates a dictionary that maps words to integers"""
@@ -118,14 +119,14 @@ def add_padding(sentences, seq_len = 280):
 def get_input_data(path): 
     """Reads in the data and returns the input data and labels for training and testing"""
     # Read train data
-    train_df = pd.read_csv(path + 'cleaned_train.csv')
-    X_train = train_df['text']
-    y_train = train_df['labels']
+    train_df = pd.read_csv(path + 'cleaned_train.csv', nrows = 10000)
+    X_train = pd.DataFrame(train_df['text'])
+    y_train = train_df['labels'].to_numpy()
 
     # Read test data
-    test_df = path + 'cleaned_test.csv'
-    X_test = test_df['text']
-    y_test = test_df['labels']
+    test_df = pd.read_csv(path + 'cleaned_test.csv', nrows = 1000)
+    X_test = pd.DataFrame(test_df['text'])
+    y_test = test_df['labels'].to_numpy()
 
     # Tokenize data
     one_hot_dict_train = create_one_hot_dict(X_train)
@@ -143,7 +144,7 @@ def get_input_data(path):
     test_loader = DataLoader(test_data, shuffle=True, batch_size=100)
     return train_loader, test_loader, len(one_hot_dict_train) + 1
 
-def calculate_f1_score(y_pred, y_true):
+def calculate_f1_score(y_pred, y_true): #DEBUG
     """Calculates the f1 score"""
     
     #calculate f1 score
@@ -153,7 +154,7 @@ def calculate_f1_score(y_pred, y_true):
 def calculate_accuracy(y_pred, y_true):
     """Calculates the accuracy"""
     predictions = torch.round(y_pred.squeeze())  # rounds to the nearest integer
-    return torch.sum(predictions == y_true).item() / len(predictions)
+    return torch.sum(predictions == y_true).item()
 
 def train_model(model, device, train_loader, test_loader, clip = 5, epochs = 10, lr = 0.05):
     """Trains the model and returns the training and testing losses and accuracies"""
@@ -201,8 +202,8 @@ def train_model(model, device, train_loader, test_loader, clip = 5, epochs = 10,
             train_acc += accuracy
 
             #calculate f1 score
-            f1 = calculate_f1_score(output, labels)
-            train_f1 += f1
+            #f1 = calculate_f1_score(output, labels)
+            #train_f1 += f1
 
             #clip the gradient to prevent exploding gradient
             nn.utils.clip_grad_norm_(model.parameters(), clip)
@@ -226,20 +227,20 @@ def train_model(model, device, train_loader, test_loader, clip = 5, epochs = 10,
             test_acc += accuracy
 
             #calculate f1 score
-            f1 = calculate_f1_score(output, labels)
-            test_f1 += f1
+            #f1 = calculate_f1_score(output, labels)
+            #test_f1 += f1
         
         #calculate average loss, accuracy, and f1 score
         epoch_train_losses.append(np.mean(train_losses))
         epoch_test_losses.append(np.mean(test_losses))
-        epoch_train_acc.append(train_acc)
-        epoch_test_acc.append(test_acc)
-        epoch_train_f1.append(train_f1/len(train_loader.dataset))
-        epoch_test_f1.append(test_f1/len(test_loader.dataset))
+        epoch_train_acc.append(train_acc / len(train_loader.dataset))
+        epoch_test_acc.append(test_acc / len(test_loader.dataset))
+        #epoch_train_f1.append(train_f1/len(train_loader.dataset))
+        #epoch_test_f1.append(test_f1/len(test_loader.dataset))
 
         print(f'Epoch: {epoch+1}/{epochs}')
-        print(f'Train Loss: {epoch_train_losses[-1]:.3f} | Train Acc: {epoch_train_acc[-1]:.3f} | Train F1: {epoch_train_f1[-1]:.3f}')
-        print(f'Test Loss: {epoch_test_losses[-1]:.3f} | Test Acc: {epoch_test_acc[-1]:.3f} | Test F1: {epoch_test_f1[-1]:.3f}')
+        print(f'Train Loss: {epoch_train_losses[-1]:.3f} | Train Acc: {epoch_train_acc[-1]:.3f} | Train F1: TBD')
+        print(f'Test Loss: {epoch_test_losses[-1]:.3f} | Test Acc: {epoch_test_acc[-1]:.3f} | Test F1: TBD')
 
         #save model
         if epoch_test_losses[-1] <= min_loss:
