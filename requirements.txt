@@ -7,4 +7,5 @@ transformers
 datasets
 nltk
 torch
+torchmetrics
 sklearn

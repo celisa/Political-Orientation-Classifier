@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import TensorDataset, DataLoader
+from torchmetrics import F1Score
+from collections import Counter
 
 #remember to cite:
 #pytorch docs
@@ -13,6 +15,7 @@ from torch.utils.data import TensorDataset, DataLoader
 #2. what is proj_size? 
 #3. is the one-hot encoding correct? Should we do embedding with GloVe? But that would generate 2d arrays for each sentence, right? Seems like a lot to process.
 #4 what does .contiguous().view(-1, self.hidden_dim) do?
+#5. what does clip do for the optimizer? Helps with explording gradient problem
 """We need to add an embedding layer because there are less words in our vocabulary. 
 It is massively inefficient to one-hot encode that many classes. So, instead of one-hot encoding, 
 we can have an embedding layer and use that layer as a lookup table. 
@@ -83,9 +86,26 @@ class BiLSTM(nn.Module):
         y_pred = output[:, -1] # get last batch of labels
         return y_pred
 
-def tokenize(data):
-    # Tokenize data
-    pass
+def create_one_hot_dict(df):
+    """Creates a dictionary that maps words to integers"""
+    #flatten the list of lists
+    corpus = df['text'].tolist()
+    corpus = [item for sublist in corpus for item in sublist]
+    corpus = Counter(corpus) #in case I want to grab the most common words
+
+    #create a dictionary that maps words to integers
+    one_hot_dict = {word: i + 1 for i, word in enumerate(corpus)}
+    return one_hot_dict
+
+def tokenize(df, one_hot_dict):
+    """Tokenizes the text in the dataframe"""
+
+    #tokenize the text
+    tokenized_data = []
+    for tweet in df['text']:
+        tokenized_data.append([one_hot_dict[word] for word in tweet]) #have to additional checks if only taking n most popular words
+    
+    return np.array(tokenized_data)
 
 def add_padding(sentences, seq_len = 280):
     """adds zeros to the beginning of the sentences to make them all the same length"""
@@ -95,136 +115,177 @@ def add_padding(sentences, seq_len = 280):
             features[ii, -len(review):] = np.array(review)[:seq_len]
     return features
 
-def get_input_data(path):
+def get_input_data(path): #TOCOMPLETE 
     """Reads in the data and returns the input data and labels for training and testing"""
     # Read train data
-
-    # create Tensor datasets
+    train_path = path + 'train.csv'
     X_train = None
     y_train = None
+
+    # Read test data
+    test_path = path + 'test.csv'
     X_test = None
     y_test = None
 
-    #create Tensor datasets
+    # Tokenize data
+    one_hot_dict_train = create_one_hot_dict(X_train)
+    one_hot_dict_test = create_one_hot_dict(X_test)
+    X_train = tokenize(X_train, one_hot_dict_train)
+    X_test = tokenize(X_test, one_hot_dict_test)
+    X_train = add_padding(X_train)
+    X_test = add_padding(X_test)
+
+    # create Tensor datasets
     train_data = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
     test_data = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
 
     train_loader = DataLoader(train_data, shuffle=True, batch_size=100)
-    valid_loader = DataLoader(test_data, shuffle=True, batch_size=100)
-    pass
+    test_loader = DataLoader(test_data, shuffle=True, batch_size=100)
+    return train_loader, test_loader, len(one_hot_dict_train) + 1
 
 def calculate_f1_score(y_pred, y_true):
     """Calculates the f1 score"""
-    pass
+    
+    #calculate f1 score
+    f1 = F1Score(task="binary")
+    return f1(y_true, y_pred).item() #not sure if I should call .item()
 
 def calculate_accuracy(y_pred, y_true):
     """Calculates the accuracy"""
-    pass
+    predictions = torch.round(y_pred.squeeze())  # rounds to the nearest integer
+    return torch.sum(predictions == y_true).item() / len(predictions)
 
-def train_model(model, train_loader, valid_loader, epochs = 10):
-    clip = 5
-epochs = 5 
-valid_loss_min = np.Inf
-# train for some number of epochs
-epoch_tr_loss,epoch_vl_loss = [],[]
-epoch_tr_acc,epoch_vl_acc = [],[]
+def train_model(model, device, train_loader, test_loader, clip = 5, epochs = 10, lr = 0.05):
+    """Trains the model and returns the training and testing losses and accuracies"""
+    epoch_train_losses = []
+    epoch_test_losses = []
+    epoch_train_acc = []
+    epoch_test_acc = []
+    epoch_train_f1 = []
+    epoch_test_f1 = []
 
-for epoch in range(epochs):
-    train_losses = []
-    train_acc = 0.0
-    model.train()
-    # initialize hidden state 
-    h = model.init_hidden(batch_size)
-    for inputs, labels in train_loader:
-        
-        inputs, labels = inputs.to(device), labels.to(device)   
-        # Creating new variables for the hidden state, otherwise
-        # we'd backprop through the entire training history
-        h = tuple([each.data for each in h])
-        
-        model.zero_grad()
-        output,h = model(inputs,h)
-        
-        # calculate the loss and perform backprop
-        loss = criterion(output.squeeze(), labels.float())
-        loss.backward()
-        train_losses.append(loss.item())
-        # calculating accuracy
-        accuracy = acc(output,labels)
-        train_acc += accuracy
-        #`clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
-        nn.utils.clip_grad_norm_(model.parameters(), clip)
-        optimizer.step()
- 
-    
-        
-    val_h = model.init_hidden(batch_size)
-    val_losses = []
-    val_acc = 0.0
-    model.eval()
-    for inputs, labels in valid_loader:
-            val_h = tuple([each.data for each in val_h])
+    #binary cross entropy loss
+    loss_func = nn.BCELoss()
 
+    #Adam optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    # initialize model_loss_criteria
+    min_loss = np.Inf
+
+    for epoch in range(epochs):
+        train_losses = []
+        test_losses = []
+        train_acc = 0.0
+        test_acc = 0.0
+        train_f1 = 0.0
+        test_f1 = 0.0
+
+        #training
+        model.train()
+        hidden = model.init_hidden()
+        for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
+            hidden = tuple([each.data for each in hidden])
 
-            output, val_h = model(inputs, val_h)
-            val_loss = criterion(output.squeeze(), labels.float())
+            model.zero_grad()
+            output,hidden = model(inputs, hidden)
 
-            val_losses.append(val_loss.item())
-            
-            accuracy = acc(output,labels)
-            val_acc += accuracy
-            
-    epoch_train_loss = np.mean(train_losses)
-    epoch_val_loss = np.mean(val_losses)
-    epoch_train_acc = train_acc/len(train_loader.dataset)
-    epoch_val_acc = val_acc/len(valid_loader.dataset)
-    epoch_tr_loss.append(epoch_train_loss)
-    epoch_vl_loss.append(epoch_val_loss)
-    epoch_tr_acc.append(epoch_train_acc)
-    epoch_vl_acc.append(epoch_val_acc)
-    print(f'Epoch {epoch+1}') 
-    print(f'train_loss : {epoch_train_loss} val_loss : {epoch_val_loss}')
-    print(f'train_accuracy : {epoch_train_acc*100} val_accuracy : {epoch_val_acc*100}')
-    if epoch_val_loss <= valid_loss_min:
-        torch.save(model.state_dict(), '../working/state_dict.pt')
-        print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,epoch_val_loss))
-        valid_loss_min = epoch_val_loss
-    print(25*'==')
-    
+            #calculate loss
+            loss = loss_func(output.squeeze(), labels.float())
+            loss.backward()
+            train_losses.append(loss.item())
 
+            #calculate accuracy
+            accuracy = calculate_accuracy(output, labels)
+            train_acc += accuracy
+
+            #calculate f1 score
+            f1 = calculate_f1_score(output, labels)
+            train_f1 += f1
+
+            #clip the gradient to prevent exploding gradient
+            nn.utils.clip_grad_norm_(model.parameters(), clip)
+            optimizer.step()
+        
+        #testing
+        hidden_test = model.init_hidden()
+        model.eval()
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            hidden_test = tuple([each.data for each in hidden_test])
+
+            output, hidden_test = model(inputs, hidden_test)
+
+            #calculate loss
+            loss = loss_func(output.squeeze(), labels.float())
+            test_losses.append(loss.item())
+
+            #calculate accuracy
+            accuracy = calculate_accuracy(output, labels)
+            test_acc += accuracy
+
+            #calculate f1 score
+            f1 = calculate_f1_score(output, labels)
+            test_f1 += f1
+        
+        #calculate average loss, accuracy, and f1 score
+        epoch_train_losses.append(np.mean(train_losses))
+        epoch_test_losses.append(np.mean(test_losses))
+        epoch_train_acc.append(train_acc)
+        epoch_test_acc.append(test_acc)
+        epoch_train_f1.append(train_f1/len(train_loader.dataset))
+        epoch_test_f1.append(test_f1/len(test_loader.dataset))
+
+        print(f'Epoch: {epoch+1}/{epochs}')
+        print(f'Train Loss: {epoch_train_losses[-1]:.3f} | Train Acc: {epoch_train_acc[-1]:.3f} | Train F1: {epoch_train_f1[-1]:.3f}')
+        print(f'Test Loss: {epoch_test_losses[-1]:.3f} | Test Acc: {epoch_test_acc[-1]:.3f} | Test F1: {epoch_test_f1[-1]:.3f}')
+
+        #save model
+        if epoch_test_losses[-1] <= min_loss:
+            torch.save(model.state_dict(), './saved_models/model.pt')
+            print("model saved")
+            min_loss = epoch_test_losses[-1]
+        print(30*'=')
+
+        return epoch_train_losses, epoch_test_losses, epoch_train_acc, epoch_test_acc, epoch_train_f1, epoch_test_f1
+             
 def run_model():
-    # Define hyperparameters
-    vocab_size = None #size of one-hot dict + 1 for padding
+
+    # Get the data
+    train_loader, test_loader, vocab_size = get_input_data('/workspaces/NLP_FinalProject/00_source_data/')
     
     # Instantiate the model w/ hyperparams
     model = BiLSTM(vocab_size)
     print(model)
 
-    # Define Loss, Optimizer
-    # loss and optimization functions
-    lr=0.001
-
-    criterion = nn.BCELoss() #binary cross entropy loss
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr) #Adam optimizer
+    #check if cuda is available
+    cuda_avail = torch.cuda.is_available()
+    if cuda_avail:
+        device = torch.device("cuda")
+        print("using GPU for training")
+    else:
+        device = torch.device("cpu")
+        print("using CPU for training")
+    model.to(device)
 
     # Train the model
-    train_model(model, train_loader, valid_loader, epochs = 10)
+    epoch_train_losses, epoch_test_losses, epoch_train_acc, epoch_test_acc, epoch_train_f1, epoch_test_f1 = train_model(model, device, train_loader, test_loader, clip = 5, epochs = 10, lr = 0.05)
 
-    return model
+    return epoch_train_losses, epoch_test_losses, epoch_train_acc, epoch_test_acc, epoch_train_f1, epoch_test_f1
 
-
-def predict_text(text, model):
+def predict_text(text, model): #TOCOMPLETE - SECONDARY
     """Predicts the sentiment of the text using the model"""
-        word_seq = np.array([vocab[preprocess_string(word)] for word in text.split() 
-                         if preprocess_string(word) in vocab.keys()])
-        word_seq = np.expand_dims(word_seq,axis=0)
-        pad =  torch.from_numpy(padding_(word_seq,500))
-        inputs = pad.to(device)
-        batch_size = 1
-        h = model.init_hidden(batch_size)
-        h = tuple([each.data for each in h])
-        output, h = model(inputs, h)
-        return(output.item())
+    pass
 
+def plot_results(epoch_train_losses, epoch_test_losses, epoch_train_acc, epoch_test_acc, epoch_train_f1, epoch_test_f1): #TOCOMPLETE - SECONDARY
+    """Plots the training and testing losses and accuracies"""
+    pass
+
+def main():
+    """Main function"""
+    epoch_train_losses, epoch_test_losses, epoch_train_acc, epoch_test_acc, epoch_train_f1, epoch_test_f1 = run_model()
+    pass
+    
+if __name__ == '__main__':
+    main()
