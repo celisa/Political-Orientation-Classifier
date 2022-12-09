@@ -115,17 +115,17 @@ def add_padding(sentences, seq_len = 280):
             features[ii, -len(review):] = np.array(review)[:seq_len]
     return features
 
-def get_input_data(path): #TOCOMPLETE 
+def get_input_data(path): 
     """Reads in the data and returns the input data and labels for training and testing"""
     # Read train data
-    train_path = path + 'train.csv'
-    X_train = None
-    y_train = None
+    train_df = pd.read_csv(path + 'cleaned_train.csv')
+    X_train = train_df['text']
+    y_train = train_df['labels']
 
     # Read test data
-    test_path = path + 'test.csv'
-    X_test = None
-    y_test = None
+    test_df = path + 'cleaned_test.csv'
+    X_test = test_df['text']
+    y_test = test_df['labels']
 
     # Tokenize data
     one_hot_dict_train = create_one_hot_dict(X_train)
