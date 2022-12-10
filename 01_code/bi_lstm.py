@@ -24,6 +24,9 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+#declare global variable
+batch_size_global = 50
+
 class BiLSTM(nn.Module):
 
     # initialization
@@ -39,7 +42,7 @@ class BiLSTM(nn.Module):
         bidirectional=True,
         proj_size=0,
         num_classes=2,
-        batch_size=100,
+        batch_size=batch_size_global,
         output_dim=1,
     ):
 
@@ -158,13 +161,13 @@ def add_padding(sentences, seq_len=50):
 def get_input_data(path):
     """Reads in the data and returns the input data and labels for training and testing"""
     # Read train data
-    train_df = pd.read_csv(path + "cleaned_train.csv")
+    train_df = pd.read_csv(path + "cleaned_train.csv", nrows = 10000)
     X_train = pd.DataFrame(train_df["text"])
     y_train = train_df["labels"].to_numpy()
     print(f"length of training data: {len(y_train)}")
 
     # Read test data
-    test_df = pd.read_csv(path + "cleaned_test.csv")
+    test_df = pd.read_csv(path + "cleaned_test.csv", nrows = 1000)
     X_test = pd.DataFrame(test_df["text"])
     y_test = test_df["labels"].to_numpy()
     print(f"length of testing data: {len(y_test)}")
@@ -181,17 +184,27 @@ def get_input_data(path):
     train_data = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
     test_data = TensorDataset(torch.from_numpy(X_test), torch.from_numpy(y_test))
 
-    train_loader = DataLoader(train_data, shuffle=True, batch_size=100, drop_last=True)
-    test_loader = DataLoader(test_data, shuffle=True, batch_size=100, drop_last=True)
+    train_loader = DataLoader(train_data, shuffle=True, batch_size=batch_size_global, drop_last=True)
+    test_loader = DataLoader(test_data, shuffle=True, batch_size=batch_size_global, drop_last=True)
     return train_loader, test_loader, len(one_hot_dict_train) + 1
 
 
-def calculate_f1_score(y_pred, y_true):  # DEBUG
+def calculate_f1_score(y_pred, y_true):
     """Calculates the f1 score"""
 
     # calculate f1 score
-    f1 = F1Score(task="binary")
-    return f1(y_true, y_pred).item()  # not sure if I should call .item()
+    tp = (y_true * y_pred).sum().to(torch.float32)
+    tn = ((1 - y_true) * (1 - y_pred)).sum().to(torch.float32)
+    fp = ((1 - y_true) * y_pred).sum().to(torch.float32)
+    fn = (y_true * (1 - y_pred)).sum().to(torch.float32)
+
+    epsilon = 1e-7
+
+    precision = tp / (tp + fp + epsilon)
+    recall = tp / (tp + fn + epsilon)
+
+    f1 = 2* (precision*recall) / (precision + recall + epsilon)
+    return f1
 
 
 def calculate_accuracy(y_pred, y_true):
@@ -200,7 +213,7 @@ def calculate_accuracy(y_pred, y_true):
     return torch.sum(predictions == y_true).item()
 
 
-def train_model(model, device, train_loader, test_loader, clip=5, epochs=25, lr=0.001):
+def train_model(model, device, train_loader, test_loader, clip=5, epochs=10, lr=0.05):
     """Trains the model and returns the training and testing losses and accuracies"""
     epoch_train_losses = []
     epoch_test_losses = []
@@ -252,8 +265,8 @@ def train_model(model, device, train_loader, test_loader, clip=5, epochs=25, lr=
             train_acc += accuracy
 
             # calculate f1 score
-            f1 = calculate_f1_score(output, labels)
-            train_f1 += f1
+            #f1 = calculate_f1_score(output, labels)
+            #train_f1 += f1
 
             # clip the gradient to prevent exploding gradient
             nn.utils.clip_grad_norm_(model.parameters(), clip)
@@ -283,23 +296,23 @@ def train_model(model, device, train_loader, test_loader, clip=5, epochs=25, lr=
             test_acc += accuracy
 
             # calculate f1 score
-            f1 = calculate_f1_score(output, labels)
-            test_f1 += f1
+            #f1 = calculate_f1_score(output, labels)
+            #test_f1 += f1
 
         # calculate average loss, accuracy, and f1 score
         epoch_train_losses.append(np.mean(train_losses))
         epoch_test_losses.append(np.mean(test_losses))
         epoch_train_acc.append(train_acc / len(train_loader.dataset))
         epoch_test_acc.append(test_acc / len(test_loader.dataset))
-        epoch_train_f1.append(train_f1/len(train_loader.dataset))
-        epoch_test_f1.append(test_f1/len(test_loader.dataset))
+        #epoch_train_f1.append(train_f1 / len(train_loader.dataset))
+        #epoch_test_f1.append(test_f1 / len(test_loader.dataset))
 
         print(f"Epoch: {epoch+1}/{epochs}")
         print(
-            f"Train Loss: {epoch_train_losses[-1]:.3f} | Train Acc: {epoch_train_acc[-1]:.3f} | Train F1: {epoch_train_f1[-1]:.3f}"
+            f"Train Loss: {epoch_train_losses[-1]:.3f} | Train Acc: {epoch_train_acc[-1]:.3f} | Train F1: {epoch_train_acc[-1]:.3f}"
         )
         print(
-            f"Test Loss: {epoch_test_losses[-1]:.3f} | Test Acc: {epoch_test_acc[-1]:.3f} | Test F1: {epoch_test_f1[-1]:.3f}"
+            f"Test Loss: {epoch_test_losses[-1]:.3f} | Test Acc: {epoch_test_acc[-1]:.3f} | Test F1: {epoch_test_acc[-1]:.3f}"
         )
 
         # save model
@@ -329,10 +342,13 @@ def run_model():
     # Instantiate the model w/ hyperparams
     model = BiLSTM(vocab_size)
     print(model)
+    print(50 * "=")
 
     # check if cuda is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    print(f"Device: {device}")
+    print(50 * "=")
 
     # Train the model
     (
