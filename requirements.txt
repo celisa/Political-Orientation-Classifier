@@ -1,0 +1,11 @@
+pylint
+black
+numpy
+pandas
+matplotlib
+transformers
+datasets
+nltk
+torch
+torchmetrics
+sklearn
