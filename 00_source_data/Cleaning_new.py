@@ -11,10 +11,11 @@ import html
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.probability import FreqDist
-from textblob import TextBlob
+from textblob import Word
+
 #read data 
-train_data =pd.read_parquet('/Users/pr158admin/Desktop/NLP/Project/NLP_FinalProject/00_source_data/train-00000-of-00001.parquet')
-test_data =pd.read_parquet('/Users/pr158admin/Desktop/NLP/Project/NLP_FinalProject/00_source_data/test-00000-of-00001.parquet')
+train_data =pd.read_parquet('./train-00000-of-00001.parquet')
+test_data =pd.read_parquet('./test-00000-of-00001.parquet')
 
 
 def clean_data(tweets_df, remove_stopwords=False):
@@ -44,14 +45,13 @@ def clean_data(tweets_df, remove_stopwords=False):
         text = re.sub('[0-9]+', '', text)
         text= re.sub(r'\b\w{1,2}\b', '', text)
         return text
+    
     tweets_df["text_new"] = tweets_df["text_new"].apply(lambda x: remove_punct(x))
 
     # removing word lengths less than 3 
     #tweets_df.text_new.str.replace(r'\b(\w{1,3})\b', '')
 
     #tweets_df.text_new.apply(lambda txt: ''.join(TextBlob(txt).correct()))
-
-    
 
     if remove_stopwords:
         # remove stopwords
@@ -69,9 +69,6 @@ def clean_data(tweets_df, remove_stopwords=False):
     #tokenisation
     tweets_df["text_new"].apply(word_tokenize)
     tweets_df["text_new"] = tweets_df["text_new"].str.split()
-
-
-
 
     return tweets_df
 
@@ -108,44 +105,39 @@ cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: lemmatizer(x
 cleaned_train=cleaned_train.drop(['date','id','username','text','uncommon'], axis=1)
 cleaned_test=cleaned_test.drop(['date','id','username','text','uncommon'], axis=1)
 
-# correct spelling errors - TODO
+cleaned_train.to_csv('cleaned_train.csv', index=False)
+cleaned_test.to_csv('cleaned_test.csv', index=False)
 
-def check_spelling(word):
-    """Check the spelling of a word and return the most likely spelling correction"""
-  
-    corr_word = Word(word)
-    
-    result = corr_word.spellcheck()
-    
-    if word != result[0][0]:
-        word = result[0][0]
-    return word
+cleaned_test = pd.read_csv('cleaned_test.csv')
+cleaned_train = pd.read_csv('cleaned_train.csv')
+# correct spelling errors
+
+# create a dictionary of all misspelled words and their corrected spelling
+all_words = np.array(cleaned_train['text_new']).tolist() + np.array(cleaned_test['text_new']).tolist()
+
+all_words_flat = [x for row in all_words for x in row]
+unique_words = set(all_words_flat)
+
+def create_misspelled_dict(unique_words):
+    """create a dictionary for all misspelled words and their corrected spelling"""
+    misspelled_dict = {}
+    for word in unique_words:
+        corr_word = Word(word)
+        result = corr_word.spellcheck()
+        if word != result[0][0]:
+            misspelled_dict[word] = result[0][0]
+    return misspelled_dict
+
+misspelled_dict = create_misspelled_dict(unique_words)
 
 # convert the 'text_new' field to a list of words - currently in str
 cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
 cleaned_train['text_new'] = cleaned_train['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
 
-# create a column for one hot encoded words
-
-def one_hot_encode(df, col_name):
-    """One hot encode a column of a dataframe"""
-    
-    matrix = np.array(df[col_name]).tolist()
-
-    flat = [x for row in matrix for x in row]
-    unique_words = set(flat)
-    vocab = {x: i for i, x in enumerate(unique_words)}
-    idxss = [[vocab[word] for word in words] for words in matrix]
-    embedding = np.zeros((len(idxss), len(vocab)), dtype=np.uint8)
-
-    for i, idxs in enumerate(idxss):
-        embedding[i, idxs] = 1
-
-    return pd.Series(embedding.tolist())
-
-cleaned_test['one_hot_encoded'] = one_hot_encode(cleaned_test, 'text_new')
-cleaned_train['one_hot_encoded'] = one_hot_encode(cleaned_train, 'text_new')
+cleaned_train['text_new'] = cleaned_train['text_new'].apply(lambda x: [word if word not in misspelled_dict.keys() else misspelled_dict[word] for word in x])
+cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: [word if word not in misspelled_dict.keys() else misspelled_dict[word] for word in x])
 
 cleaned_train.to_csv('cleaned_train.csv', index=False)
 cleaned_test.to_csv('cleaned_test.csv', index=False)
 
+print("Data Processing Done!")
