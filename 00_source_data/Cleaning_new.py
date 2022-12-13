@@ -108,6 +108,44 @@ cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: lemmatizer(x
 cleaned_train=cleaned_train.drop(['date','id','username','text','uncommon'], axis=1)
 cleaned_test=cleaned_test.drop(['date','id','username','text','uncommon'], axis=1)
 
+# correct spelling errors - TODO
+
+def check_spelling(word):
+    """Check the spelling of a word and return the most likely spelling correction"""
+  
+    corr_word = Word(word)
+    
+    result = corr_word.spellcheck()
+    
+    if word != result[0][0]:
+        word = result[0][0]
+    return word
+
+# convert the 'text_new' field to a list of words - currently in str
+cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
+cleaned_train['text_new'] = cleaned_train['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
+
+# create a column for one hot encoded words
+
+def one_hot_encode(df, col_name):
+    """One hot encode a column of a dataframe"""
+    
+    matrix = np.array(df[col_name]).tolist()
+
+    flat = [x for row in matrix for x in row]
+    unique_words = set(flat)
+    vocab = {x: i for i, x in enumerate(unique_words)}
+    idxss = [[vocab[word] for word in words] for words in matrix]
+    embedding = np.zeros((len(idxss), len(vocab)), dtype=np.uint8)
+
+    for i, idxs in enumerate(idxss):
+        embedding[i, idxs] = 1
+
+    return pd.Series(embedding.tolist())
+
+cleaned_test['one_hot_encoded'] = one_hot_encode(cleaned_test, 'text_new')
+cleaned_train['one_hot_encoded'] = one_hot_encode(cleaned_train, 'text_new')
+
 cleaned_train.to_csv('cleaned_train.csv', index=False)
 cleaned_test.to_csv('cleaned_test.csv', index=False)
 
