@@ -110,7 +110,10 @@ cleaned_test.to_csv('cleaned_test.csv', index=False)
 
 cleaned_test = pd.read_csv('cleaned_test.csv')
 cleaned_train = pd.read_csv('cleaned_train.csv')
-# correct spelling errors
+
+# convert the 'text_new' field to a list of words - currently in str
+cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
+cleaned_train['text_new'] = cleaned_train['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
 
 # create a dictionary of all misspelled words and their corrected spelling
 all_words = np.array(cleaned_train['text_new']).tolist() + np.array(cleaned_test['text_new']).tolist()
@@ -130,10 +133,6 @@ def create_misspelled_dict(unique_words):
 
 misspelled_dict = create_misspelled_dict(unique_words)
 
-# convert the 'text_new' field to a list of words - currently in str
-cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
-cleaned_train['text_new'] = cleaned_train['text_new'].apply(lambda x: x.strip('][').replace("'",'').split(', '))
-
 cleaned_train['text_new'] = cleaned_train['text_new'].apply(lambda x: [word if word not in misspelled_dict.keys() else misspelled_dict[word] for word in x])
 cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: [word if word not in misspelled_dict.keys() else misspelled_dict[word] for word in x])
 
@@ -141,3 +140,19 @@ cleaned_train.to_csv('cleaned_train.csv', index=False)
 cleaned_test.to_csv('cleaned_test.csv', index=False)
 
 print("Data Processing Done!")
+
+def one_hot_encode(df, col_name):
+    """One hot encode a column of a dataframe into embedding matrix"""
+    
+    matrix = np.array(df[col_name]).tolist()
+
+    flat = [x for row in matrix for x in row]
+    unique_words = set(flat)
+    vocab = {x: i for i, x in enumerate(unique_words)}
+    idxss = [[vocab[word] for word in words] for words in matrix]
+    embedding = np.zeros((len(idxss), len(vocab)), dtype=np.uint8)
+
+    for i, idxs in enumerate(idxss):
+        embedding[i, idxs] = 1
+
+    return embedding
