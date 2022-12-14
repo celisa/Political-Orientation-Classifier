@@ -12,6 +12,10 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.probability import FreqDist
 from textblob import Word
+import os
+
+nltk.download('punkt')
+nltk.download('wordnet')
 
 #read data 
 train_data =pd.read_parquet('./train-00000-of-00001.parquet')
@@ -92,6 +96,7 @@ all_words = np.array(cleaned_train['text_new']).tolist() + np.array(cleaned_test
 
 all_words_flat = [x for row in all_words for x in row]
 unique_words = set(all_words_flat)
+print(f"There are {len(unique_words)} unique words in the dataset.")
 
 def create_misspelled_dict(unique_words):
     """create a dictionary for all misspelled words and their corrected spelling"""
@@ -103,8 +108,12 @@ def create_misspelled_dict(unique_words):
             misspelled_dict[word] = result[0][0]
     return misspelled_dict
 
-misspelled_dict = create_misspelled_dict(unique_words)
-print(misspelled_dict)
+#check if file exists
+if os.path.exists('misspelled_dict.csv'):
+    misspelled_dict = pd.read_csv('misspelled_dict.csv',index_col=0).to_dict()
+else:
+    misspelled_dict = create_misspelled_dict(unique_words)
+    pd.DataFrame.from_dict(misspelled_dict, orient='index').to_csv('misspelled_dict.csv')
 
 cleaned_train['text_new'] = cleaned_train['text_new'].apply(lambda x: [word if word not in misspelled_dict.keys() else misspelled_dict[word] for word in x])
 cleaned_test['text_new'] = cleaned_test['text_new'].apply(lambda x: [word if word not in misspelled_dict.keys() else misspelled_dict[word] for word in x])
