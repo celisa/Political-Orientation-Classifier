@@ -9,3 +9,5 @@ nltk
 torch
 torchmetrics
 sklearn
+wordcloud
+gensim
