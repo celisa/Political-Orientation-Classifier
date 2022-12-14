@@ -17,6 +17,9 @@ from textblob import Word
 train_data =pd.read_parquet('./train-00000-of-00001.parquet')
 test_data =pd.read_parquet('./test-00000-of-00001.parquet')
 
+#drop empty rows with no tweets
+train_data.drop(train_data[train_data['text'].str.len()==0].index, inplace = True)
+test_data.drop(test_data[test_data['text'].str.len()==0].index, inplace = True)
 
 def clean_data(tweets_df, remove_stopwords=False):
     """Clean the data by removing URLs, converting to lowercase and removing @s and #s from the tweet"""
