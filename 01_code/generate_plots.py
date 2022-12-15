@@ -12,12 +12,12 @@ from bi_lstm import BiLSTM
 def load_data():
     """Helper function to load the metrics data from the results folder"""
 
-    test_acc = pd.read_csv('./results/02_results/epoch_test_acc.csv')
-    train_acc = pd.read_csv('./results/02_results/epoch_train_acc.csv')
-    test_f1 = pd.read_csv('./results/02_results/epoch_test_f1.csv')
-    train_f1 = pd.read_csv('./results/02_results/epoch_train_f1.csv')
-    train_loss = pd.read_csv('./results/02_results/epoch_train_losses.csv')
-    test_loss = pd.read_csv('./results/02_results/epoch_test_losses.csv')
+    test_acc = pd.read_csv('./results/real_data/epoch_test_acc.csv')
+    train_acc = pd.read_csv('./results/real_data/epoch_train_acc.csv')
+    test_f1 = pd.read_csv('./results/real_data/epoch_test_f1.csv')
+    train_f1 = pd.read_csv('./results/real_data/epoch_train_f1.csv')
+    train_loss = pd.read_csv('./results/real_data/epoch_train_losses.csv')
+    test_loss = pd.read_csv('./results/real_data/epoch_test_losses.csv')
     return test_acc, train_acc, test_f1, train_f1, train_loss, test_loss
 
 def generate_plot(data, title, metric):
