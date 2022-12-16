@@ -9,15 +9,15 @@ from bi_lstm import BiLSTM
 
 # Read in the data
 
-def load_data():
+def load_data(path):
     """Helper function to load the metrics data from the results folder"""
 
-    test_acc = pd.read_csv('./results/real_data/epoch_test_acc.csv')
-    train_acc = pd.read_csv('./results/real_data/epoch_train_acc.csv')
-    test_f1 = pd.read_csv('./results/real_data/epoch_test_f1.csv')
-    train_f1 = pd.read_csv('./results/real_data/epoch_train_f1.csv')
-    train_loss = pd.read_csv('./results/real_data/epoch_train_losses.csv')
-    test_loss = pd.read_csv('./results/real_data/epoch_test_losses.csv')
+    test_acc = pd.read_csv(path + 'epoch_test_acc.csv')
+    train_acc = pd.read_csv(path + 'epoch_train_acc.csv')
+    test_f1 = pd.read_csv(path + 'epoch_test_f1.csv')
+    train_f1 = pd.read_csv(path + 'epoch_train_f1.csv')
+    train_loss = pd.read_csv(path + 'epoch_train_losses.csv')
+    test_loss = pd.read_csv(path + 'epoch_test_losses.csv')
     return test_acc, train_acc, test_f1, train_f1, train_loss, test_loss
 
 def generate_plot(data, title, metric):
@@ -102,10 +102,14 @@ def generate_confusion_matrix(X, y, title, is_synth = False):
 
 
 def main():
-    test_acc, train_acc, test_f1, train_f1, train_loss, test_loss = load_data()
+    test_acc, train_acc, test_f1, train_f1, train_loss, test_loss = load_data('./results/real_data/')
     generate_plot([train_acc, test_acc], 'Accuracy for Training and Test Data - Real', 'Accuracy')
     generate_plot([train_f1, test_f1], 'F1 Score for Training and Test Data - Real', 'F1 Score')
     generate_plot([train_loss, test_loss], 'Loss for Training and Test Data - Real', 'Loss')
+    test_acc, train_acc, test_f1, train_f1, train_loss, test_loss = load_data('./results/synth_data/')
+    generate_plot([train_acc, test_acc], 'Accuracy for Training and Test Data - Synthetic', 'Accuracy')
+    generate_plot([train_f1, test_f1], 'F1 Score for Training and Test Data - Synthetic', 'F1 Score')
+    generate_plot([train_loss, test_loss], 'Loss for Training and Test Data - Synthetic', 'Loss')
     X_real, y_real, X_synth, y_synth  = prepare_data()
     generate_confusion_matrix(X_real, y_real, "Confusion Matrix for LSTM - Real Data")
     generate_confusion_matrix(X_synth, y_synth, "Confusion Matrix for LSTM - Synthetic Data", is_synth = True)
