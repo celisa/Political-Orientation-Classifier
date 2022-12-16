@@ -3,7 +3,7 @@ Description: This script trains a naive bayes model to predict the political aff
 
 """
 
-# Import libraries
+# Importing libraries
 
 import re #for regular expressions
 import nltk #for text manipulation
@@ -15,11 +15,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import random
 from nltk.stem.porter import *
+from sklearn.model_selection import train_test_split    
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer 
 import gensim 
 from sklearn.naive_bayes import MultinomialNB  # Naive Bayes Classifier
 from sklearn.metrics import *
-
 
 
 # Importing the dataset
@@ -57,52 +57,64 @@ def clean_data(tweets_data):
     
     return tweets_data
 
-# Naive Bayes Classifier
-combine = clean_data(combine)
-text = combine['tidy_tweet']
-model = CountVectorizer(ngram_range = (2, 2), max_df=0.90 ,min_df=2, stop_words='english')
-matrix = model.fit_transform(text).toarray()
-df_output = pd.DataFrame(data = matrix, columns = model.get_feature_names())
-df_output.T.tail(5)
 
-bow_vectorizer = CountVectorizer(ngram_range = (2, 2), max_df=0.90 ,min_df=2 , stop_words='english')
-bow = bow_vectorizer.fit_transform(combine['tidy_tweet'])
+    
+def naive_bayes_model (tweets_data):
+    tweets_data = clean_data(tweets_data)
+    bow_vectorizer = CountVectorizer(ngram_range = (2, 2), max_df=0.90 ,min_df=2 , stop_words='english')
+    bow = bow_vectorizer.fit_transform(tweets_data['tidy_tweet'])
 
-
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(bow, combine['labels'],
+    X_train, X_test, y_train, y_test = train_test_split(bow, tweets_data['labels'],
                                                     test_size=0.2, random_state=69)
 
-print("X_train_shape : ",X_train.shape)
-print("X_test_shape : ",X_test.shape)
-print("y_train_shape : ",y_train.shape)
-print("y_test_shape : ",y_test.shape)
+    print("X_train_shape : ",X_train.shape)
+    print("X_test_shape : ",X_test.shape)
+    print("y_train_shape : ",y_train.shape)
+    print("y_test_shape : ",y_test.shape)
 
 
-model_naive = MultinomialNB().fit(X_train, y_train) 
-predicted_naive = model_naive.predict(X_test)
+    model_naive = MultinomialNB().fit(X_train, y_train) 
+    predicted_naive = model_naive.predict(X_test)
 
-#confusion matrix
-plt.figure(dpi=600)
-mat = confusion_matrix(y_test, predicted_naive)
-sns.heatmap(mat.T, annot=True, fmt='d', cbar=False)
-
-plt.title('Confusion Matrix for Naive Bayes')
-plt.xlabel('true label')
-plt.ylabel('predicted label')
-plt.savefig("confusion_matrix.png")
-plt.show()
+    return predicted_naive, y_test
 
 
-# Accuracy
-score_naive = accuracy_score(predicted_naive, y_test)
-print("Accuracy with Naive-bayes: ",score_naive)
 
-# F1 Score
-f1_naive = f1_score(predicted_naive, y_test, average='weighted')
-print("F1 Score with Naive-bayes: ",f1_naive)
+def conf_mat(tweets_data):
+    model_results = naive_bayes_model(tweets_data)
+    predicted_naive = model_results[0]
+    y_test = model_results[1]
+    
+    plt.figure(dpi=600)
+    mat = confusion_matrix(y_test, predicted_naive)
+    sns.heatmap(mat.T, annot=True, fmt='d', cbar=False)
 
-# AUC
-auc_naive = roc_auc_score(predicted_naive, y_test)
-print("AUC with Naive-bayes: ",auc_naive)
+    plt.title('Confusion Matrix for Naive Bayes')
+    plt.xlabel('true label')
+    plt.ylabel('predicted label')
+    plt.savefig("confusion_matrix.png")
+    return plt.show()
+
+
+def metrics(tweets_data):
+    model_results = naive_bayes_model(tweets_data)
+    predicted_naive = model_results[0]
+    y_test = model_results[1]
+
+    # Accuracy
+    score_naive = accuracy_score(predicted_naive, y_test)
+    print("Accuracy with Naive-bayes: ",score_naive)
+
+    # F1 Score
+    f1_naive = f1_score(predicted_naive, y_test, average='weighted')
+    print("F1 Score with Naive-bayes: ",f1_naive)
+
+    # AUC
+    auc_naive = roc_auc_score(predicted_naive, y_test)
+    print("AUC with Naive-bayes: ",auc_naive)
+    
+    return 
+
+conf_mat(combine)
+metrics(combine)
 
