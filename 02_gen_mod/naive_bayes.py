@@ -23,8 +23,8 @@ from sklearn.metrics import *
 
 
 # Importing the dataset
-train =pd.read_parquet('/Users/pr158admin/Desktop/NLP/Project/NLP_FinalProject/00_source_data/train-00000-of-00001.parquet')
-test =pd.read_parquet('/Users/pr158admin/Desktop/NLP/Project/NLP_FinalProject/00_source_data/test-00000-of-00001.parquet')
+train_data =pd.read_parquet('/Users/kashafali/Documents/Duke/IDS703-NLP/Project/NLP_FinalProject/00_source_data/train-00000-of-00001.parquet')
+test_data =pd.read_parquet('/Users/kashafali/Documents/Duke/IDS703-NLP/Project/NLP_FinalProject/00_source_data/test-00000-of-00001.parquet')
 
 # Combining the train and test data for cleaning
 combine=train.append(test,ignore_index=True)
