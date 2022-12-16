@@ -30,31 +30,35 @@ test = pd.read_parquet('/Users/kashafali/Documents/Duke/IDS703-NLP/Project/NLP_F
 combine=train.append(test,ignore_index=True)
 
 
+# Cleaning the tweets text by removing certain patterns
 def remove_pattern(input_text,pattern):
     r= re.findall(pattern, input_text)
     for i in r:
         input_text = re.sub(i, '', input_text)
     return input_text
 
-# Removing twitter handles
-combine['tidy_tweet'] = np.vectorize(remove_pattern)(combine['text'],"@[\w]*") 
+def clean_data(tweets_data):
+    # Removing twitter handles
+    tweets_data['tidy_tweet'] = np.vectorize(remove_pattern)(tweets_data['text'],"@[\w]*") 
 
-# All emojis and characters are replaced by white space
-combine['tidy_tweet'] = combine['tidy_tweet'].str.replace("[^a-zA-Z#]"," ")
+    # All emojis and characters are replaced by white space
+    tweets_data['tidy_tweet'] = tweets_data['tidy_tweet'].str.replace("[^a-zA-Z#]"," ")
 
-# Removing short words
-combine['tidy_tweet'] = combine['tidy_tweet'].apply(lambda x: ' '.join([w for w in x.split() if len(w)>3])) #removing words whose length is less than 3
+    # Removing short words
+    tweets_data['tidy_tweet'] = tweets_data['tidy_tweet'].apply(lambda x: ' '.join([w for w in x.split() if len(w)>3])) #removing words whose length is less than 3
 
-#stemming
-tokenized_tweet = combine['tidy_tweet'].apply(lambda x:x.split()) #it will split all words by whitespace
-stemmer = PorterStemmer()
-tokenized_tweet = tokenized_tweet.apply(lambda x: [stemmer.stem(i) for i in x]) #it will stemmatized all words in tweet
-for i in range(len(tokenized_tweet)):
-    tokenized_tweet[i] = ' '.join(tokenized_tweet[i]) #concat all words into one sentence
-combine['tidy_tweet'] = tokenized_tweet
+    #stemming
+    tokenized_tweet = tweets_data['tidy_tweet'].apply(lambda x:x.split()) #it will split all words by whitespace
+    stemmer = PorterStemmer()
+    tokenized_tweet = tokenized_tweet.apply(lambda x: [stemmer.stem(i) for i in x]) #it will stemmatized all words in tweet
+    for i in range(len(tokenized_tweet)):
+        tokenized_tweet[i] = ' '.join(tokenized_tweet[i]) #concat all words into one sentence
+    tweets_data['tidy_tweet'] = tokenized_tweet
+    
+    return tweets_data
 
 # Naive Bayes Classifier
-
+combine = clean_data(combine)
 text = combine['tidy_tweet']
 model = CountVectorizer(ngram_range = (2, 2), max_df=0.90 ,min_df=2, stop_words='english')
 matrix = model.fit_transform(text).toarray()
