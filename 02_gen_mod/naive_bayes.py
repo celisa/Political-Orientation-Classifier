@@ -57,11 +57,29 @@ def clean_data(tweets_data):
     
     return tweets_data
 
+# Finding the best alpha for smoothing the model
+def find_best_alpha(tweets_data):      
+    tweets_data = clean_data(combine)
+    bow_vectorizer = CountVectorizer(ngram_range = (1, 4), max_df=0.90 ,min_df=2 , stop_words='english')
+    bow = bow_vectorizer.fit_transform(tweets_data['tidy_tweet'])
 
+    X_train, X_test, y_train, y_test = train_test_split(bow, tweets_data['labels'], test_size=0.2, random_state=69)
+    best_alpha = 0
+    best_score = 0
+    for alpha in np.arange(0.1, 1.1, 0.1):
+        model = MultinomialNB(alpha=alpha)
+        model.fit(X_train, y_train)
+        score = model.score(X_test, y_test)
+        if score > best_score:
+            best_alpha = alpha
+            best_score = score
+    print("Best alpha: {}".format(best_alpha))
+    print("Best score: {}".format(best_score))
+    return best_alpha
     
 def naive_bayes_model (tweets_data):
     tweets_data = clean_data(tweets_data)
-    bow_vectorizer = CountVectorizer(ngram_range = (2, 2), max_df=0.90 ,min_df=2 , stop_words='english')
+    bow_vectorizer = CountVectorizer(ngram_range = (1, 4), max_df=0.90 ,min_df=2 , stop_words='english')
     bow = bow_vectorizer.fit_transform(tweets_data['tidy_tweet'])
 
     X_train, X_test, y_train, y_test = train_test_split(bow, tweets_data['labels'],
@@ -72,8 +90,9 @@ def naive_bayes_model (tweets_data):
     print("y_train_shape : ",y_train.shape)
     print("y_test_shape : ",y_test.shape)
 
+    best_alpha = find_best_alpha(tweets_data)
 
-    model_naive = MultinomialNB().fit(X_train, y_train) 
+    model_naive = MultinomialNB(alpha = best_alpha).fit(X_train, y_train) 
     predicted_naive = model_naive.predict(X_test)
 
     return predicted_naive, y_test
@@ -115,6 +134,6 @@ def metrics(tweets_data):
     
     return 
 
-conf_mat(combine)
+#conf_mat(combine)
 metrics(combine)
 
