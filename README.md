@@ -26,3 +26,10 @@ textblob
 
 ## Data
 @Pragya to add more details about the dataset.
+
+
+## Generative Model
+
+### Description
+
+We employed the naive bayes classifier as a generative model to classify tweets based on political affiliation. A naive bayes classifier is a machine learning model that uses model features to discriminate between different objects. This model is based on the bayes’ theorem, which assumes that all features are independent of each other, or in other words, the presence of a particular feature in a class is unrelated to the presence of any other feature.
