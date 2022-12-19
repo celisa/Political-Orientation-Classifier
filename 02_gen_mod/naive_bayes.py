@@ -76,7 +76,8 @@ def find_best_alpha(tweets_data):
     print("Best alpha: {}".format(best_alpha))
     print("Best score: {}".format(best_score))
     return best_alpha
-    
+
+
 def naive_bayes_model (tweets_data):
     tweets_data = clean_data(tweets_data)
     bow_vectorizer = CountVectorizer(ngram_range = (1, 4), max_df=0.90 ,min_df=2 , stop_words='english')
