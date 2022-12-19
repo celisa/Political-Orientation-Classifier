@@ -24,12 +24,17 @@ gensim
 textblob
 ```
 
-## Data
-@Pragya to add more details about the dataset.
-
-
 ## Generative Model
 
 ### Description
 
 We employed the naive bayes classifier as a generative model to classify tweets based on political affiliation. A naive bayes classifier is a machine learning model that uses model features to discriminate between different objects. This model is based on the bayes’ theorem, which assumes that all features are independent of each other, or in other words, the presence of a particular feature in a class is unrelated to the presence of any other feature.
+
+## Discriminative Model
+
+### Description
+
+A bidirectional LSTM (biLSTM) model was chosen to perform the text classification task for the following reasons: 1) LSTMs are great at retaining relevant information while addressing the exploding gradient problem, 2) Bi-directional structures are designed to infer information both from the past and future. We did also consider using transformers, which are great at capturing long-range dependencies, but decided that LSTMs are more appropriate for our purpose given the shorter lengths of tweets and the desire for a simpler model. LSTM is an artifical neural network that is capable of processing the entire sequence of data with a memory cell known as a ‘cell state’ that maintains its state over time. 
+
+
+
